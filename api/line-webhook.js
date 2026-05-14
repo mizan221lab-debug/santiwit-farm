@@ -10,22 +10,23 @@ const sb = createClient(
   process.env.SUPABASE_SERVICE_KEY
 );
 
-// ── LINE config: อ่านจาก Supabase (cache ใน module scope) ──
+// ── LINE config: โหลดจาก Supabase ตอน module load (pre-warm) ──
 let LINE_TOKEN  = process.env.LINE_CHANNEL_ACCESS_TOKEN;
 let LINE_SECRET = process.env.LINE_CHANNEL_SECRET;
-let _configLoaded = false;
 
-async function loadConfig() {
-  if (_configLoaded) return;
-  const { data } = await sb.from('farm_config').select('key,value');
-  if (data) {
-    for (const row of data) {
-      if (row.key === 'LINE_CHANNEL_ACCESS_TOKEN') LINE_TOKEN  = row.value;
-      if (row.key === 'LINE_CHANNEL_SECRET')       LINE_SECRET = row.value;
+const _configReady = (async () => {
+  try {
+    const { data } = await sb.from('farm_config').select('key,value');
+    if (data) {
+      for (const row of data) {
+        if (row.key === 'LINE_CHANNEL_ACCESS_TOKEN') LINE_TOKEN  = row.value;
+        if (row.key === 'LINE_CHANNEL_SECRET')       LINE_SECRET = row.value;
+      }
     }
-  }
-  _configLoaded = true;
-}
+  } catch (e) { console.error('loadConfig error:', e.message); }
+})();
+
+async function loadConfig() { await _configReady; }
 
 // ── helpers ──────────────────────────────────────────────────
 const fmt = (n) => Number(n).toLocaleString('th-TH', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
@@ -40,7 +41,7 @@ async function lineReply(replyToken, text) {
 }
 
 function verifySignature(body, sig) {
-  if (!LINE_SECRET) return true;
+  if (!LINE_SECRET || LINE_SECRET === 'placeholder') return true;
   const hash = crypto.createHmac('sha256', LINE_SECRET).update(body).digest('base64');
   return hash === sig;
 }
