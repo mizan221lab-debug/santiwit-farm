@@ -9,8 +9,23 @@ const sb = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_KEY
 );
-const LINE_TOKEN   = process.env.LINE_CHANNEL_ACCESS_TOKEN;
-const LINE_SECRET  = process.env.LINE_CHANNEL_SECRET;
+
+// ── LINE config: อ่านจาก Supabase (cache ใน module scope) ──
+let LINE_TOKEN  = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+let LINE_SECRET = process.env.LINE_CHANNEL_SECRET;
+let _configLoaded = false;
+
+async function loadConfig() {
+  if (_configLoaded) return;
+  const { data } = await sb.from('farm_config').select('key,value');
+  if (data) {
+    for (const row of data) {
+      if (row.key === 'LINE_CHANNEL_ACCESS_TOKEN') LINE_TOKEN  = row.value;
+      if (row.key === 'LINE_CHANNEL_SECRET')       LINE_SECRET = row.value;
+    }
+  }
+  _configLoaded = true;
+}
 
 // ── helpers ──────────────────────────────────────────────────
 const fmt = (n) => Number(n).toLocaleString('th-TH', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
@@ -445,6 +460,7 @@ async function handleFlow(st, txt, userId, rt) {
 //  Vercel handler
 // ══════════════════════════════════════════════════════════════
 export default async function handler(req, res) {
+  await loadConfig();
   if (req.method === 'GET') {
     return res.status(200).json({ ok: true, service: 'SantiwitFarm LINE Webhook v1' });
   }
